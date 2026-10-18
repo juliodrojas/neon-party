@@ -284,6 +284,25 @@ footer .sig b{color:var(--magenta)}
   *,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}
   html{scroll-behavior:auto}
 }
+
+/* ---------- admin ---------- */
+.adminmodal{position:fixed;inset:0;z-index:99999;display:none;align-items:center;justify-content:center;background:rgba(5,0,15,.85);backdrop-filter:blur(6px)}
+.adminmodal.open{display:flex}
+.adminbox{background:#14042b;border:1px solid rgba(255,47,214,.4);border-radius:18px;padding:2rem 1.6rem;width:min(340px,88vw);text-align:center;box-shadow:0 0 60px rgba(255,47,214,.25)}
+.admintitle{font-family:'Orbitron';letter-spacing:.3em;color:var(--magenta);margin-bottom:.4rem}
+.adminsub{font-size:.8rem;color:#cbb8e8;margin-bottom:1.2rem}
+.adminbox input{width:100%;background:#0a0118;border:1px solid rgba(0,240,255,.4);border-radius:10px;color:#fff;font-size:1.4rem;letter-spacing:.5em;text-align:center;padding:.7rem;margin-bottom:1rem}
+.adminbox button{width:100%;padding:.8rem;border:none;border-radius:999px;font-family:'Orbitron';letter-spacing:.2em;cursor:pointer;background:linear-gradient(90deg,var(--magenta),var(--cyan));color:#0a0118;font-weight:700;margin-bottom:.6rem}
+.adminbox button.ghost{background:transparent;border:1px solid rgba(255,255,255,.25);color:#cbb8e8}
+.adminerr{color:#ff6b9d;font-size:.8rem;min-height:1.2em}
+.tile .hidebtn{position:absolute;top:.5rem;left:.6rem;z-index:3;background:rgba(0,0,0,.7);border:1px solid #ff2fd6;color:#ff2fd6;border-radius:999px;width:2rem;height:2rem;font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.tile.is-hidden{outline:2px dashed #ff2fd6;outline-offset:-2px}
+.tile.is-hidden img{opacity:.35}
+.lbadjust{margin:0 auto 1.2rem;max-width:280px;display:none}
+.lbadjust label{font-family:'Orbitron';font-size:.7rem;letter-spacing:.25em;color:var(--cyan);display:block;margin-bottom:.4rem}
+.lbadjust input[type=range]{width:100%;accent-color:var(--magenta)}
+.adminbar{position:fixed;bottom:0;left:0;right:0;z-index:99998;display:none;background:rgba(10,1,24,.92);border-top:1px solid rgba(255,47,214,.4);padding:.6rem;text-align:center;font-family:'Orbitron';font-size:.7rem;letter-spacing:.25em;color:var(--magenta)}
+body.admin .adminbar{display:block}
 </style>
 </head>
 <body>
@@ -380,10 +399,26 @@ footer .sig b{color:var(--magenta)}
   <div class="lb-card">
     <img id="lbImg" alt="Neon Party frame">
     <div class="num" id="lbNum">NP / 001</div>
-    <button class="heart" id="lbHeart" aria-label="love this frame" style="position:static;margin:0 auto 1.4rem">♥</button><br>
+    <button class="heart" id="lbHeart" aria-label="love this frame" style="position:static;margin:0 auto 1.4rem">♥</button><br>    <div class="lbadjust" id="lbAdjust">
+      <label>SHADOWS / DARK LIFT <span id="lbAdjustVal">0</span></label>
+      <input type="range" id="lbAdjustRange" min="-40" max="60" value="0" step="1">
+    </div>
+
     <button class="lb-close" id="lbClose">BACK TO THE ROLL</button>
   </div>
 </div>
+
+<div class="adminmodal" id="adminModal" role="dialog" aria-modal="true">
+  <div class="adminbox">
+    <div class="admintitle">ADMIN</div>
+    <div class="adminsub">Enter PIN to manage the gallery</div>
+    <input type="password" inputmode="numeric" maxlength="8" id="adminPin" placeholder="••••" autocomplete="off">
+    <button id="adminGo">UNLOCK</button>
+    <button id="adminCancel" class="ghost">CANCEL</button>
+    <div class="adminerr" id="adminErr"></div>
+  </div>
+</div>
+<div class="adminbar" id="adminBar">⚡ ADMIN MODE — tap ✕ to hide a photo, tap a photo for shadow controls</div>
 
 <script>
 (function(){
@@ -435,14 +470,107 @@ footer .sig b{color:var(--magenta)}
     var t = roll.querySelector('[data-id="' + lbId + '"] .heart');
     if (t) { t.classList.toggle('lit', !!hearts[lbId]); t.querySelector('span').textContent = hearts[lbId] ? 1 : 0; }
   });
+  var lbAdjustRange = document.getElementById('lbAdjustRange');
+  var lbAdjustVal = document.getElementById('lbAdjustVal');
+  var lbAdjustBox = document.getElementById('lbAdjust');
+  var adjustTimer = null;
+  var currentLbId = null;
+  if (lbAdjustRange){
+    lbAdjustRange.addEventListener('input', function(){
+      var v = parseInt(lbAdjustRange.value, 10) || 0;
+      lbAdjustVal.textContent = (v > 0 ? '+' : '') + v;
+      lbImg.style.filter = v ? 'brightness(' + ((100 + v) / 100).toFixed(2) + ')' : '';
+    });
+    lbAdjustRange.addEventListener('change', function(){
+      var v = parseInt(lbAdjustRange.value, 10) || 0;
+      var id = currentLbId;
+      if (!id) return;
+      ADJUST[id] = v;
+      if (v === 0) delete ADJUST[id];
+      var t = roll.querySelector('[data-id="' + id + '"] img');
+      if (t) applyAdjustToImg(t, id);
+      if (adjustTimer) clearTimeout(adjustTimer);
+      adjustTimer = setTimeout(function(){
+        adminPost({ action: 'adjust', id: id, value: v }, function(){});
+      }, 600);
+    });
+  }
   function openLb(id, file){
+    currentLbId = id;
     lbImg.src = file;
     lbImg.alt = 'Neon Party frame ' + id;
     lbNum.textContent = id.replace('/', ' / ');
+    var av = ADJUST[id] || 0;
+    lbImg.style.filter = av ? 'brightness(' + ((100 + av) / 100).toFixed(2) + ')' : '';
+    if (lbAdjustBox) lbAdjustBox.style.display = ADMIN ? 'block' : 'none';
+    if (lbAdjustRange){ lbAdjustRange.value = av; lbAdjustVal.textContent = (av > 0 ? '+' : '') + av; }
     syncLbHeart(id);
     lb.classList.add('open');
   }
   var PHOTOS = [{"id":"NP/001","file":"assets/gallery/NP_001.jpg"},{"id":"NP/002","file":"assets/gallery/NP_002.jpg"},{"id":"NP/003","file":"assets/gallery/NP_003.jpg"},{"id":"NP/004","file":"assets/gallery/NP_004.jpg"},{"id":"NP/005","file":"assets/gallery/NP_005.jpg"},{"id":"NP/006","file":"assets/gallery/NP_006.jpg"},{"id":"NP/007","file":"assets/gallery/NP_007.jpg"},{"id":"NP/008","file":"assets/gallery/NP_008.jpg"},{"id":"NP/009","file":"assets/gallery/NP_009.jpg"},{"id":"NP/010","file":"assets/gallery/NP_010.jpg"},{"id":"NP/011","file":"assets/gallery/NP_011.jpg"},{"id":"NP/012","file":"assets/gallery/NP_012.jpg"},{"id":"NP/013","file":"assets/gallery/NP_013.jpg"},{"id":"NP/014","file":"assets/gallery/NP_014.jpg"},{"id":"NP/015","file":"assets/gallery/NP_015.jpg"},{"id":"NP/016","file":"assets/gallery/NP_016.jpg"},{"id":"NP/017","file":"assets/gallery/NP_017.jpg"},{"id":"NP/018","file":"assets/gallery/NP_018.jpg"},{"id":"NP/019","file":"assets/gallery/NP_019.jpg"},{"id":"NP/020","file":"assets/gallery/NP_020.jpg"},{"id":"NP/021","file":"assets/gallery/NP_021.jpg"},{"id":"NP/022","file":"assets/gallery/NP_022.jpg"},{"id":"NP/023","file":"assets/gallery/NP_023.jpg"},{"id":"NP/024","file":"assets/gallery/NP_024.jpg"},{"id":"NP/025","file":"assets/gallery/NP_025.jpg"},{"id":"NP/026","file":"assets/gallery/NP_026.jpg"},{"id":"NP/027","file":"assets/gallery/NP_027.jpg"},{"id":"NP/028","file":"assets/gallery/NP_028.jpg"},{"id":"NP/029","file":"assets/gallery/NP_029.jpg"},{"id":"NP/030","file":"assets/gallery/NP_030.jpg"},{"id":"NP/031","file":"assets/gallery/NP_031.jpg"},{"id":"NP/032","file":"assets/gallery/NP_032.jpg"},{"id":"NP/033","file":"assets/gallery/NP_033.jpg"},{"id":"NP/034","file":"assets/gallery/NP_034.jpg"},{"id":"NP/035","file":"assets/gallery/NP_035.jpg"},{"id":"NP/036","file":"assets/gallery/NP_036.jpg"},{"id":"NP/037","file":"assets/gallery/NP_037.jpg"},{"id":"NP/038","file":"assets/gallery/NP_038.jpg"},{"id":"NP/039","file":"assets/gallery/NP_039.jpg"},{"id":"NP/040","file":"assets/gallery/NP_040.jpg"},{"id":"NP/041","file":"assets/gallery/NP_041.jpg"},{"id":"NP/042","file":"assets/gallery/NP_042.jpg"},{"id":"NP/043","file":"assets/gallery/NP_043.jpg"},{"id":"NP/044","file":"assets/gallery/NP_044.jpg"},{"id":"NP/045","file":"assets/gallery/NP_045.jpg"},{"id":"NP/046","file":"assets/gallery/NP_046.jpg"},{"id":"NP/047","file":"assets/gallery/NP_047.jpg"},{"id":"NP/048","file":"assets/gallery/NP_048.jpg"},{"id":"NP/049","file":"assets/gallery/NP_049.jpg"},{"id":"NP/050","file":"assets/gallery/NP_050.jpg"},{"id":"NP/051","file":"assets/gallery/NP_051.jpg"},{"id":"NP/052","file":"assets/gallery/NP_052.jpg"},{"id":"NP/053","file":"assets/gallery/NP_053.jpg"},{"id":"NP/054","file":"assets/gallery/NP_054.jpg"},{"id":"NP/055","file":"assets/gallery/NP_055.jpg"},{"id":"NP/056","file":"assets/gallery/NP_056.jpg"},{"id":"NP/057","file":"assets/gallery/NP_057.jpg"},{"id":"NP/058","file":"assets/gallery/NP_058.jpg"},{"id":"NP/059","file":"assets/gallery/NP_059.jpg"},{"id":"NP/060","file":"assets/gallery/NP_060.jpg"},{"id":"NP/061","file":"assets/gallery/NP_061.jpg"},{"id":"NP/062","file":"assets/gallery/NP_062.jpg"},{"id":"NP/063","file":"assets/gallery/NP_063.jpg"},{"id":"NP/064","file":"assets/gallery/NP_064.jpg"},{"id":"NP/065","file":"assets/gallery/NP_065.jpg"},{"id":"NP/066","file":"assets/gallery/NP_066.jpg"},{"id":"NP/067","file":"assets/gallery/NP_067.jpg"},{"id":"NP/068","file":"assets/gallery/NP_068.jpg"},{"id":"NP/069","file":"assets/gallery/NP_069.jpg"},{"id":"NP/070","file":"assets/gallery/NP_070.jpg"},{"id":"NP/071","file":"assets/gallery/NP_071.jpg"},{"id":"NP/072","file":"assets/gallery/NP_072.jpg"},{"id":"NP/073","file":"assets/gallery/NP_073.jpg"},{"id":"NP/074","file":"assets/gallery/NP_074.jpg"},{"id":"NP/075","file":"assets/gallery/NP_075.jpg"},{"id":"NP/076","file":"assets/gallery/NP_076.jpg"},{"id":"NP/077","file":"assets/gallery/NP_077.jpg"},{"id":"NP/078","file":"assets/gallery/NP_078.jpg"},{"id":"NP/079","file":"assets/gallery/NP_079.jpg"},{"id":"NP/080","file":"assets/gallery/NP_080.jpg"},{"id":"NP/081","file":"assets/gallery/NP_081.jpg"},{"id":"NP/082","file":"assets/gallery/NP_082.jpg"},{"id":"NP/083","file":"assets/gallery/NP_083.jpg"},{"id":"NP/084","file":"assets/gallery/NP_084.jpg"},{"id":"NP/085","file":"assets/gallery/NP_085.jpg"},{"id":"NP/086","file":"assets/gallery/NP_086.jpg"},{"id":"NP/087","file":"assets/gallery/NP_087.jpg"},{"id":"NP/088","file":"assets/gallery/NP_088.jpg"},{"id":"NP/089","file":"assets/gallery/NP_089.jpg"},{"id":"NP/090","file":"assets/gallery/NP_090.jpg"},{"id":"NP/091","file":"assets/gallery/NP_091.jpg"},{"id":"NP/092","file":"assets/gallery/NP_092.jpg"},{"id":"NP/093","file":"assets/gallery/NP_093.jpg"},{"id":"NP/094","file":"assets/gallery/NP_094.jpg"},{"id":"NP/095","file":"assets/gallery/NP_095.jpg"},{"id":"NP/096","file":"assets/gallery/NP_096.jpg"},{"id":"NP/097","file":"assets/gallery/NP_097.jpg"},{"id":"NP/098","file":"assets/gallery/NP_098.jpg"},{"id":"NP/099","file":"assets/gallery/NP_099.jpg"},{"id":"NP/100","file":"assets/gallery/NP_100.jpg"},{"id":"NP/101","file":"assets/gallery/NP_101.jpg"},{"id":"NP/102","file":"assets/gallery/NP_102.jpg"},{"id":"NP/103","file":"assets/gallery/NP_103.jpg"},{"id":"NP/104","file":"assets/gallery/NP_104.jpg"},{"id":"NP/105","file":"assets/gallery/NP_105.jpg"},{"id":"NP/106","file":"assets/gallery/NP_106.jpg"},{"id":"NP/107","file":"assets/gallery/NP_107.jpg"},{"id":"NP/108","file":"assets/gallery/NP_108.jpg"},{"id":"NP/109","file":"assets/gallery/NP_109.jpg"},{"id":"NP/110","file":"assets/gallery/NP_110.jpg"},{"id":"NP/111","file":"assets/gallery/NP_111.jpg"},{"id":"NP/112","file":"assets/gallery/NP_112.jpg"},{"id":"NP/113","file":"assets/gallery/NP_113.jpg"},{"id":"NP/114","file":"assets/gallery/NP_114.jpg"},{"id":"NP/115","file":"assets/gallery/NP_115.jpg"},{"id":"NP/116","file":"assets/gallery/NP_116.jpg"},{"id":"NP/117","file":"assets/gallery/NP_117.jpg"},{"id":"NP/118","file":"assets/gallery/NP_118.jpg"},{"id":"NP/119","file":"assets/gallery/NP_119.jpg"},{"id":"NP/120","file":"assets/gallery/NP_120.jpg"},{"id":"NP/121","file":"assets/gallery/NP_121.jpg"},{"id":"NP/122","file":"assets/gallery/NP_122.jpg"},{"id":"NP/123","file":"assets/gallery/NP_123.jpg"},{"id":"NP/124","file":"assets/gallery/NP_124.jpg"},{"id":"NP/125","file":"assets/gallery/NP_125.jpg"},{"id":"NP/126","file":"assets/gallery/NP_126.jpg"},{"id":"NP/127","file":"assets/gallery/NP_127.jpg"},{"id":"NP/128","file":"assets/gallery/NP_128.jpg"},{"id":"NP/129","file":"assets/gallery/NP_129.jpg"},{"id":"NP/130","file":"assets/gallery/NP_130.jpg"},{"id":"NP/131","file":"assets/gallery/NP_131.jpg"},{"id":"NP/132","file":"assets/gallery/NP_132.jpg"},{"id":"NP/133","file":"assets/gallery/NP_133.jpg"},{"id":"NP/134","file":"assets/gallery/NP_134.jpg"},{"id":"NP/135","file":"assets/gallery/NP_135.jpg"},{"id":"NP/136","file":"assets/gallery/NP_136.jpg"},{"id":"NP/137","file":"assets/gallery/NP_137.jpg"},{"id":"NP/138","file":"assets/gallery/NP_138.jpg"},{"id":"NP/139","file":"assets/gallery/NP_139.jpg"},{"id":"NP/140","file":"assets/gallery/NP_140.jpg"},{"id":"NP/141","file":"assets/gallery/NP_141.jpg"},{"id":"NP/142","file":"assets/gallery/NP_142.jpg"},{"id":"NP/143","file":"assets/gallery/NP_143.jpg"},{"id":"NP/144","file":"assets/gallery/NP_144.jpg"},{"id":"NP/145","file":"assets/gallery/NP_145.jpg"},{"id":"NP/146","file":"assets/gallery/NP_146.jpg"},{"id":"NP/147","file":"assets/gallery/NP_147.jpg"},{"id":"NP/148","file":"assets/gallery/NP_148.jpg"},{"id":"NP/149","file":"assets/gallery/NP_149.jpg"},{"id":"NP/150","file":"assets/gallery/NP_150.jpg"},{"id":"NP/151","file":"assets/gallery/NP_151.jpg"},{"id":"NP/152","file":"assets/gallery/NP_152.jpg"},{"id":"NP/153","file":"assets/gallery/NP_153.jpg"},{"id":"NP/154","file":"assets/gallery/NP_154.jpg"},{"id":"NP/155","file":"assets/gallery/NP_155.jpg"},{"id":"NP/156","file":"assets/gallery/NP_156.jpg"},{"id":"NP/157","file":"assets/gallery/NP_157.jpg"},{"id":"NP/158","file":"assets/gallery/NP_158.jpg"},{"id":"NP/159","file":"assets/gallery/NP_159.jpg"},{"id":"NP/160","file":"assets/gallery/NP_160.jpg"},{"id":"NP/161","file":"assets/gallery/NP_161.jpg"},{"id":"NP/162","file":"assets/gallery/NP_162.jpg"},{"id":"NP/163","file":"assets/gallery/NP_163.jpg"},{"id":"NP/164","file":"assets/gallery/NP_164.jpg"},{"id":"NP/165","file":"assets/gallery/NP_165.jpg"},{"id":"NP/166","file":"assets/gallery/NP_166.jpg"},{"id":"NP/167","file":"assets/gallery/NP_167.jpg"},{"id":"NP/168","file":"assets/gallery/NP_168.jpg"},{"id":"NP/169","file":"assets/gallery/NP_169.jpg"},{"id":"NP/170","file":"assets/gallery/NP_170.jpg"},{"id":"NP/171","file":"assets/gallery/NP_171.jpg"},{"id":"NP/172","file":"assets/gallery/NP_172.jpg"},{"id":"NP/173","file":"assets/gallery/NP_173.jpg"},{"id":"NP/174","file":"assets/gallery/NP_174.jpg"},{"id":"NP/175","file":"assets/gallery/NP_175.jpg"},{"id":"NP/176","file":"assets/gallery/NP_176.jpg"},{"id":"NP/177","file":"assets/gallery/NP_177.jpg"},{"id":"NP/178","file":"assets/gallery/NP_178.jpg"},{"id":"NP/179","file":"assets/gallery/NP_179.jpg"},{"id":"NP/180","file":"assets/gallery/NP_180.jpg"},{"id":"NP/181","file":"assets/gallery/NP_181.jpg"},{"id":"NP/182","file":"assets/gallery/NP_182.jpg"},{"id":"NP/183","file":"assets/gallery/NP_183.jpg"},{"id":"NP/184","file":"assets/gallery/NP_184.jpg"},{"id":"NP/185","file":"assets/gallery/NP_185.jpg"},{"id":"NP/186","file":"assets/gallery/NP_186.jpg"},{"id":"NP/187","file":"assets/gallery/NP_187.jpg"},{"id":"NP/188","file":"assets/gallery/NP_188.jpg"},{"id":"NP/189","file":"assets/gallery/NP_189.jpg"},{"id":"NP/190","file":"assets/gallery/NP_190.jpg"},{"id":"NP/191","file":"assets/gallery/NP_191.jpg"},{"id":"NP/192","file":"assets/gallery/NP_192.jpg"},{"id":"NP/193","file":"assets/gallery/NP_193.jpg"},{"id":"NP/194","file":"assets/gallery/NP_194.jpg"},{"id":"NP/195","file":"assets/gallery/NP_195.jpg"},{"id":"NP/196","file":"assets/gallery/NP_196.jpg"},{"id":"NP/197","file":"assets/gallery/NP_197.jpg"},{"id":"NP/198","file":"assets/gallery/NP_198.jpg"},{"id":"NP/199","file":"assets/gallery/NP_199.jpg"},{"id":"NP/200","file":"assets/gallery/NP_200.jpg"},{"id":"NP/201","file":"assets/gallery/NP_201.jpg"},{"id":"NP/202","file":"assets/gallery/NP_202.jpg"},{"id":"NP/203","file":"assets/gallery/NP_203.jpg"},{"id":"NP/204","file":"assets/gallery/NP_204.jpg"},{"id":"NP/205","file":"assets/gallery/NP_205.jpg"},{"id":"NP/206","file":"assets/gallery/NP_206.jpg"},{"id":"NP/207","file":"assets/gallery/NP_207.jpg"},{"id":"NP/208","file":"assets/gallery/NP_208.jpg"},{"id":"NP/209","file":"assets/gallery/NP_209.jpg"},{"id":"NP/210","file":"assets/gallery/NP_210.jpg"},{"id":"NP/211","file":"assets/gallery/NP_211.jpg"}];
+  var ADMIN = false;
+  try { ADMIN = sessionStorage.getItem('neon_admin') === '1'; } catch(e){}
+  if (ADMIN) document.body.classList.add('admin');
+  var HIDDEN = {};
+  var ADJUST = {};
+  function adminPin(){ try { return sessionStorage.getItem('neon_pin') || ''; } catch(e){ return ''; } }
+  function applyAdjustToImg(img, id){
+    var v = ADJUST[id] || 0;
+    img.style.filter = v ? 'brightness(' + ((100 + v) / 100).toFixed(2) + ')' : '';
+  }
+  function refreshTileVisibility(){
+    var tiles = roll.querySelectorAll('.tile');
+    var visible = 0, i, t, id;
+    for (i = 0; i < tiles.length; i++){
+      t = tiles[i]; id = t.getAttribute('data-id');
+      var hide = HIDDEN[id] && !ADMIN;
+      t.style.display = hide ? 'none' : '';
+      t.classList.toggle('is-hidden', !!HIDDEN[id]);
+      if (!hide) visible++;
+    }
+    var note = document.querySelector('.roll-note');
+    if (note) note.textContent = visible + ' PHOTOS LIVE \u2014 THE NIGHT, GRADED \u26a1';
+  }
+  function adminPost(payload, cb){
+    payload.pin = adminPin();
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/admin', true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.timeout = 9000;
+    xhr.onreadystatechange = function(){
+      if (xhr.readyState === 4){
+        var ok = false, data = {};
+        try { data = JSON.parse(xhr.responseText || '{}'); ok = xhr.status === 200 && !!data.ok; } catch(e){}
+        cb(ok, data);
+      }
+    };
+    xhr.ontimeout = function(){ cb(false, {}); };
+    xhr.onerror = function(){ cb(false, {}); };
+    try { xhr.send(JSON.stringify(payload)); } catch(e){ cb(false, {}); }
+  }
+  function loadRemoteState(){
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', '/api/state', true);
+    xhr.timeout = 6000;
+    xhr.onreadystatechange = function(){
+      if (xhr.readyState === 4 && xhr.status === 200){
+        try {
+          var s = JSON.parse(xhr.responseText || '{}');
+          HIDDEN = {}; ADJUST = {};
+          (s.hidden || []).forEach(function(id){ HIDDEN[id] = 1; });
+          ADJUST = s.adjust || {};
+          var tiles = roll.querySelectorAll('.tile'), i;
+          for (i = 0; i < tiles.length; i++){
+            var t = tiles[i], img = t.querySelector('img');
+            if (img) applyAdjustToImg(img, t.getAttribute('data-id'));
+          }
+          refreshTileVisibility();
+        } catch(e){}
+      }
+    };
+    xhr.onerror = function(){};
+    try { xhr.send(); } catch(e){}
+  }
   (function(items){
     items.forEach(function(it){
       var t = document.createElement('div');
@@ -456,11 +584,26 @@ footer .sig b{color:var(--magenta)}
       var num = document.createElement('div');
       num.className = 'num'; num.textContent = it.id;
       t.appendChild(im); t.appendChild(num); t.appendChild(heartBtn(it.id));
+      if (ADMIN){
+        var x = document.createElement('button');
+        x.className = 'hidebtn'; x.textContent = '\u2715'; x.setAttribute('aria-label', 'hide this frame');
+        x.addEventListener('click', function(ev){
+          ev.stopPropagation();
+          var id = it.id, willHide = !HIDDEN[id];
+          if (willHide) HIDDEN[id] = 1; else delete HIDDEN[id];
+          refreshTileVisibility();
+          adminPost({ action: willHide ? 'hide' : 'unhide', id: id }, function(ok){
+            if (!ok){ if (willHide) delete HIDDEN[id]; else HIDDEN[id] = 1; refreshTileVisibility(); }
+          });
+        });
+        t.appendChild(x);
+      }
       t.addEventListener('click', function(){ openLb(it.id, it.file); });
       roll.appendChild(t);
+      applyAdjustToImg(im, it.id);
     });
-    var note = document.querySelector('.roll-note');
-    if (note) note.textContent = items.length + ' PHOTOS LIVE — THE NIGHT, GRADED ⚡';
+    refreshTileVisibility();
+    loadRemoteState();
   })(PHOTOS);
   document.getElementById('lbClose').addEventListener('click', function(){ lb.classList.remove('open'); });
   lb.addEventListener('click', function(e){ if (e.target === lb) lb.classList.remove('open'); });
@@ -491,6 +634,50 @@ footer .sig b{color:var(--magenta)}
     document.getElementById('gbMsg').value = '';
     renderGB();
   });
+
+  /* admin mode */
+  var adminModal = document.getElementById('adminModal');
+  function openAdminModal(){
+    document.getElementById('adminErr').textContent = '';
+    document.getElementById('adminPin').value = '';
+    adminModal.classList.add('open');
+    setTimeout(function(){ document.getElementById('adminPin').focus(); }, 100);
+  }
+  function closeAdminModal(){ adminModal.classList.remove('open'); }
+  document.getElementById('adminCancel').addEventListener('click', closeAdminModal);
+  adminModal.addEventListener('click', function(e){ if (e.target === adminModal) closeAdminModal(); });
+  function tryUnlock(){
+    var pin = document.getElementById('adminPin').value.trim();
+    if (!pin) return;
+    document.getElementById('adminErr').textContent = 'checking...';
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/admin', true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.timeout = 9000;
+    xhr.onreadystatechange = function(){
+      if (xhr.readyState === 4){
+        var ok = false;
+        try { var d = JSON.parse(xhr.responseText || '{}'); ok = xhr.status === 200 && !!d.ok; } catch(e){}
+        if (ok){
+          try {
+            sessionStorage.setItem('neon_admin', '1');
+            sessionStorage.setItem('neon_pin', pin);
+          } catch(e){}
+          location.hash = '';
+          location.reload();
+        } else {
+          document.getElementById('adminErr').textContent = 'wrong PIN, try again';
+        }
+      }
+    };
+    xhr.ontimeout = function(){ document.getElementById('adminErr').textContent = 'no connection, try again'; };
+    xhr.onerror = function(){ document.getElementById('adminErr').textContent = 'no connection, try again'; };
+    try { xhr.send(JSON.stringify({ pin: pin, action: 'verify' })); }
+    catch(e){ document.getElementById('adminErr').textContent = 'no connection, try again'; }
+  }
+  document.getElementById('adminGo').addEventListener('click', tryUnlock);
+  document.getElementById('adminPin').addEventListener('keydown', function(e){ if (e.key === 'Enter') tryUnlock(); });
+  if (location.hash === '#admin' && !ADMIN) openAdminModal();
 
   /* reveal on scroll */
   var io = new IntersectionObserver(function(es){
