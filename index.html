@@ -449,8 +449,10 @@ footer .sig b{color:var(--magenta)}
       t.className = 'tile real reveal in';
       t.setAttribute('data-id', it.id);
       var im = document.createElement('img');
-    
-      im.src = it.file; im.alt = 'Neon Party frame ' + it.id;
+      im.alt = 'Neon Party frame ' + it.id;
+      im.setAttribute('data-full', it.file);
+      im.onerror = function(){ var f = this.getAttribute('data-full'); if (f && this.src.indexOf('/thumbs/') !== -1){ this.src = f; } };
+      im.src = 'assets/gallery/thumbs/' + it.file.split('/').pop();
       var num = document.createElement('div');
       num.className = 'num'; num.textContent = it.id;
       t.appendChild(im); t.appendChild(num); t.appendChild(heartBtn(it.id));
