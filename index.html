@@ -152,6 +152,10 @@ h2.section-title{
   display:flex;gap:.3rem;align-items:center;
 }
 .tile .heart.lit{background:var(--magenta);color:#000}
+.tile.real img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.lb-card{max-width:520px}
+.lb-card img{width:100%;border-radius:12px;margin-bottom:1rem;display:block}
+.lb-card .heart{margin-bottom:1.4rem}
 .roll-note{
   margin-top:1.6rem;font-size:.8rem;letter-spacing:.24em;color:var(--dim);text-align:center;
 }
@@ -306,7 +310,7 @@ footer .sig b{color:var(--magenta)}
     <p class="section-sub">Neon in all the right ways. The glow, the fits, the moments in between — all here. Tap a frame to open it, tap the heart to save your favorite.</p>
   </div>
   <div class="roll reveal" id="roll"></div>
-  <p class="roll-note">00 PHOTOS LIVE — THE DROP LANDS AFTER THE PARTY ⚡</p>
+  <p class="roll-note">THE DROP IS LOADING — COME BACK GLOWING ⚡</p>
 </section>
 
 <section id="highlights">
@@ -317,16 +321,16 @@ footer .sig b{color:var(--magenta)}
   </div>
   <div class="hl-grid">
     <div class="hl-card reveal">
-      <img src="assets/hl-1.jpg" alt="Neon dance floor from above" loading="lazy" decoding="async">
-      <div class="cap"><div class="tag">PICK 001</div><p>The floor from above — magenta pools, confetti in the air, nobody standing still.</p></div>
+      <img src="assets/gallery/NP_102.jpg" alt="Glow sticks in the dark" loading="lazy" decoding="async">
+      <div class="cap"><div class="tag">PICK 001</div><p>Glow stick constellations — green, red and blue trails painting the dark.</p></div>
     </div>
     <div class="hl-card reveal">
-      <img src="assets/hl-2.jpg" alt="DJ booth under neon lights" loading="lazy" decoding="async">
-      <div class="cap"><div class="tag">PICK 002</div><p>The booth — cyan tubes, purple lasers, hands mid-mix. The night had a pulse.</p></div>
+      <img src="assets/gallery/NP_094.jpg" alt="Two friends at the Neon Party" loading="lazy" decoding="async">
+      <div class="cap"><div class="tag">PICK 002</div><p>The fit check — all smiles under the neon, glow necklace doing the talking.</p></div>
     </div>
     <div class="hl-card reveal">
-      <img src="assets/hl-3.jpg" alt="Friends with neon glow sticks" loading="lazy" decoding="async">
-      <div class="cap"><div class="tag">PICK 003</div><p>Glow stick gang — faces lit blue and magenta, laughing through the blur.</p></div>
+      <img src="assets/gallery/NP_051.jpg" alt="The Jam Spot stage" loading="lazy" decoding="async">
+      <div class="cap"><div class="tag">PICK 003</div><p>The room — the stage lit up, the crowd packed in. The night had a pulse.</p></div>
     </div>
   </div>
 </section>
@@ -374,8 +378,9 @@ footer .sig b{color:var(--magenta)}
 
 <div class="lightbox" id="lightbox" role="dialog" aria-modal="true">
   <div class="lb-card">
+    <img id="lbImg" alt="Neon Party frame">
     <div class="num" id="lbNum">NP / 001</div>
-    <p>This frame is still developing.<br><b>The photo drops after the party.</b><br>Come back glowing.</p>
+    <button class="heart" id="lbHeart" aria-label="love this frame" style="position:static;margin:0 auto 1.4rem">♥</button><br>
     <button class="lb-close" id="lbClose">BACK TO THE ROLL</button>
   </div>
 </div>
@@ -391,39 +396,72 @@ footer .sig b{color:var(--magenta)}
   for (var m = 0; m < 8; m++) html += "<span>" + phrase + "</span>";
   track.innerHTML = html + html;
 
-  /* camera roll — procedural neon tiles */
+  /* camera roll — real graded photos from assets/gallery/manifest.json */
   var roll = document.getElementById('roll');
-  var arts = ['a1','a2','a3','a4','a5','a6'];
   var hearts = {};
   try { hearts = JSON.parse(localStorage.getItem('neon_hearts') || '{}'); } catch(e){}
-  for (var i = 1; i <= 12; i++) {
-    (function(n){
-      var id = 'NP/' + String(n).padStart(3,'0');
-      var t = document.createElement('div');
-      t.className = 'tile ' + arts[(n-1) % arts.length];
-      t.innerHTML =
-        '<div class="art"></div>' +
-        '<div class="num">' + id + '</div>' +
-        '<button class="heart' + (hearts[id] ? ' lit' : '') + '" aria-label="love this frame">♥ <span>' + (hearts[id] ? 1 : 0) + '</span></button>' +
-        '<div class="status">DROP INCOMING</div>';
-      var hb = t.querySelector('.heart');
-      hb.addEventListener('click', function(ev){
-        ev.stopPropagation();
-        hearts[id] = !hearts[id];
-        hb.classList.toggle('lit', !!hearts[id]);
-        hb.querySelector('span').textContent = hearts[id] ? 1 : 0;
-        try { localStorage.setItem('neon_hearts', JSON.stringify(hearts)); } catch(e){}
-      });
-      t.addEventListener('click', function(){
-        document.getElementById('lbNum').textContent = id;
-        document.getElementById('lightbox').classList.add('open');
-      });
-      roll.appendChild(t);
-    })(i);
+  function saveHearts(){ try { localStorage.setItem('neon_hearts', JSON.stringify(hearts)); } catch(e){} }
+  function heartBtn(id){
+    var hb = document.createElement('button');
+    hb.className = 'heart' + (hearts[id] ? ' lit' : '');
+    hb.setAttribute('aria-label', 'love this frame');
+    hb.innerHTML = '♥ <span>' + (hearts[id] ? 1 : 0) + '</span>';
+    hb.addEventListener('click', function(ev){
+      ev.stopPropagation();
+      hearts[id] = !hearts[id];
+      hb.classList.toggle('lit', !!hearts[id]);
+      hb.querySelector('span').textContent = hearts[id] ? 1 : 0;
+      syncLbHeart(id);
+      saveHearts();
+    });
+    return hb;
   }
-
-  /* lightbox */
   var lb = document.getElementById('lightbox');
+  var lbImg = document.getElementById('lbImg');
+  var lbNum = document.getElementById('lbNum');
+  var lbHeart = document.getElementById('lbHeart');
+  var lbId = null;
+  function syncLbHeart(id){
+    lbId = id;
+    lbHeart.className = 'heart' + (hearts[id] ? ' lit' : '');
+    lbHeart.style.position = 'static';
+    lbHeart.style.margin = '0 auto 1.4rem';
+  }
+  lbHeart.addEventListener('click', function(){
+    if (!lbId) return;
+    hearts[lbId] = !hearts[lbId];
+    syncLbHeart(lbId);
+    saveHearts();
+    var t = roll.querySelector('[data-id="' + lbId + '"] .heart');
+    if (t) { t.classList.toggle('lit', !!hearts[lbId]); t.querySelector('span').textContent = hearts[lbId] ? 1 : 0; }
+  });
+  function openLb(id, file){
+    lbImg.src = file;
+    lbImg.alt = 'Neon Party frame ' + id;
+    lbNum.textContent = id.replace('/', ' / ');
+    syncLbHeart(id);
+    lb.classList.add('open');
+  }
+  fetch('assets/gallery/manifest.json').then(function(r){ return r.json(); }).then(function(items){
+    items.forEach(function(it){
+      var t = document.createElement('div');
+      t.className = 'tile real reveal in';
+      t.setAttribute('data-id', it.id);
+      var im = document.createElement('img');
+      im.loading = 'lazy'; im.decoding = 'async';
+      im.src = it.file; im.alt = 'Neon Party frame ' + it.id;
+      var num = document.createElement('div');
+      num.className = 'num'; num.textContent = it.id;
+      t.appendChild(im); t.appendChild(num); t.appendChild(heartBtn(it.id));
+      t.addEventListener('click', function(){ openLb(it.id, it.file); });
+      roll.appendChild(t);
+    });
+    var note = document.querySelector('.roll-note');
+    if (note) note.textContent = items.length + ' PHOTOS LIVE — THE NIGHT, GRADED ⚡';
+  }).catch(function(){
+    var note = document.querySelector('.roll-note');
+    if (note) note.textContent = 'THE DROP IS LOADING — COME BACK GLOWING ⚡';
+  });
   document.getElementById('lbClose').addEventListener('click', function(){ lb.classList.remove('open'); });
   lb.addEventListener('click', function(e){ if (e.target === lb) lb.classList.remove('open'); });
   document.addEventListener('keydown', function(e){ if (e.key === 'Escape') lb.classList.remove('open'); });
