@@ -34,10 +34,24 @@ export async function onRequestPost(context) {
   if (body.action === 'adjust') {
     var adjust = {};
     try { adjust = JSON.parse(await kv.get('neon_adjust') || '{}'); } catch (e) {}
-    var v = parseInt(body.value, 10);
-    if (isNaN(v)) v = 0;
-    v = Math.max(-40, Math.min(60, v));
-    if (v === 0) delete adjust[id]; else adjust[id] = v;
+    var clamp = function (x, lo, hi) {
+      x = parseInt(x, 10);
+      if (isNaN(x)) x = 0;
+      return Math.max(lo, Math.min(hi, x));
+    };
+    var obj = null;
+    if (body.value !== null && typeof body.value === 'object') {
+      obj = {
+        lift: clamp(body.value.lift, -40, 60),
+        contrast: clamp(body.value.contrast, -50, 50),
+        sat: clamp(body.value.sat, -100, 100)
+      };
+      if (!obj.lift && !obj.contrast && !obj.sat) obj = null;
+    } else {
+      var v = clamp(body.value, -40, 60);
+      if (v) obj = { lift: v, contrast: 0, sat: 0 };
+    }
+    if (obj) adjust[id] = obj; else delete adjust[id];
     await kv.put('neon_adjust', JSON.stringify(adjust));
     return json({ ok: true, adjust: adjust });
   }
