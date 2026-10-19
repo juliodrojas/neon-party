@@ -249,6 +249,11 @@ h2.section-title{
   font-family:'Orbitron';font-size:.72rem;letter-spacing:.26em;cursor:pointer;color:#000;font-weight:800;
   background:linear-gradient(90deg,var(--magenta),var(--cyan));border:none;border-radius:999px;padding:.8rem 2rem;
 }
+.lb-nav{position:absolute;top:50%;transform:translateY(-50%);z-index:6;background:rgba(0,0,0,.55);
+  border:1px solid rgba(0,240,255,.45);color:#fff;border-radius:999px;width:2.7rem;height:2.7rem;
+  font-size:1.4rem;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center}
+#lbPrev{left:.7rem}
+#lbNext{right:.7rem}
 .lb-download{
   display:inline-block;margin-top:.7rem;font-family:'Orbitron';font-size:.72rem;letter-spacing:.26em;cursor:pointer;
   color:var(--cyan);text-decoration:none;border:1px solid rgba(0,240,255,.55);border-radius:999px;padding:.8rem 2rem;
@@ -401,6 +406,8 @@ body.admin .adminbar{display:block}
 </div>
 
 <div class="lightbox" id="lightbox" role="dialog" aria-modal="true">
+  <button class="lb-nav" id="lbPrev" aria-label="previous photo">‹</button>
+  <button class="lb-nav" id="lbNext" aria-label="next photo">›</button>
   <div class="lb-card">
     <img id="lbImg" alt="Neon Party frame">
     <div class="num" id="lbNum">NP / 001</div>
@@ -502,8 +509,37 @@ body.admin .adminbar{display:block}
       }, 600);
     });
   }
+  var lbList = [], lbIdx = 0;
+  function visiblePhotos(){
+    return PHOTOS.filter(function(p){ return ADMIN || !HIDDEN[p.id]; });
+  }
+  function lbNav(dir){
+    var n = lbList.length;
+    if (!n) return;
+    lbIdx = (lbIdx + dir + n) % n;
+    var p = lbList[lbIdx];
+    openLb(p.id, p.file);
+  }
+  document.getElementById('lbPrev').addEventListener('click', function(e){ e.stopPropagation(); lbNav(-1); });
+  document.getElementById('lbNext').addEventListener('click', function(e){ e.stopPropagation(); lbNav(1); });
+  var swipeX = null, swipeY = null, swipeOK = false;
+  lb.addEventListener('touchstart', function(e){
+    var el = e.target;
+    if (el && el.closest && el.closest('input,button,a,.lbadjust')){ swipeOK = false; return; }
+    var t = e.changedTouches[0];
+    swipeX = t.clientX; swipeY = t.clientY; swipeOK = true;
+  }, {passive:true});
+  lb.addEventListener('touchend', function(e){
+    if (!swipeOK || swipeX === null) return;
+    var t = e.changedTouches[0];
+    var dx = t.clientX - swipeX, dy = t.clientY - swipeY;
+    swipeOK = false; swipeX = null;
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.4) lbNav(dx < 0 ? 1 : -1);
+  }, {passive:true});
   function openLb(id, file){
     currentLbId = id;
+    lbList = visiblePhotos();
+    for (var i = 0; i < lbList.length; i++){ if (lbList[i].id === id){ lbIdx = i; break; } }
     if (lbDownload){
       lbDownload.href = file;
       lbDownload.setAttribute('download', 'neon-party-' + id.replace('/', '-') + '.jpg');
@@ -618,7 +654,12 @@ body.admin .adminbar{display:block}
   })(PHOTOS);
   document.getElementById('lbClose').addEventListener('click', function(){ lb.classList.remove('open'); });
   lb.addEventListener('click', function(e){ if (e.target === lb) lb.classList.remove('open'); });
-  document.addEventListener('keydown', function(e){ if (e.key === 'Escape') lb.classList.remove('open'); });
+  document.addEventListener('keydown', function(e){
+    if (e.key === 'Escape') lb.classList.remove('open');
+    if (!lb.classList.contains('open')) return;
+    if (e.key === 'ArrowLeft') lbNav(-1);
+    if (e.key === 'ArrowRight') lbNav(1);
+  });
 
   /* guestbook */
   var list = document.getElementById('gbList');
