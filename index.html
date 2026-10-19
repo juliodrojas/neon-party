@@ -310,6 +310,7 @@ footer .sig b{color:var(--magenta)}
 .tile.is-hidden img{opacity:.35}
 .lbadjust{margin:0 auto 1.2rem;max-width:280px;display:none}
 .lbadjust label{font-family:'Orbitron';font-size:.7rem;letter-spacing:.25em;color:var(--cyan);display:block;margin-bottom:.4rem}
+.lbadjust label:not(:first-child){margin-top:1rem}
 .lbadjust input[type=range]{width:100%;accent-color:var(--magenta)}
 .adminbar{position:fixed;bottom:0;left:0;right:0;z-index:99998;display:none;background:rgba(10,1,24,.92);border-top:1px solid rgba(255,47,214,.4);padding:.6rem;text-align:center;font-family:'Orbitron';font-size:.7rem;letter-spacing:.25em;color:var(--magenta)}
 body.admin .adminbar{display:block}
@@ -417,6 +418,10 @@ body.admin{padding-bottom:2.6rem}
     <button class="heart" id="lbHeart" aria-label="love this frame" style="position:static;margin:0 auto 1.4rem">♥</button><br>    <div class="lbadjust" id="lbAdjust">
       <label>SHADOWS / DARK LIFT <span id="lbAdjustVal">0</span></label>
       <input type="range" id="lbAdjustRange" min="-40" max="60" value="0" step="1">
+      <label>CONTRAST <span id="lbContrastVal">0</span></label>
+      <input type="range" id="lbContrastRange" min="-50" max="50" value="0" step="1">
+      <label>SATURATION <span id="lbSatVal">0</span></label>
+      <input type="range" id="lbSatRange" min="-100" max="100" value="0" step="1">
     </div>
 
     <button class="lb-close" id="lbClose">BACK TO THE ROLL</button>
@@ -434,7 +439,7 @@ body.admin{padding-bottom:2.6rem}
     <div class="adminerr" id="adminErr"></div>
   </div>
 </div>
-<div class="adminbar" id="adminBar">⚡ ADMIN MODE — tap ✕ to hide a photo, tap a photo for shadow controls</div>
+<div class="adminbar" id="adminBar">⚡ ADMIN MODE — tap ✕ to hide a photo, tap a photo for photo controls</div>
 
 <script>
 (function(){
@@ -489,29 +494,57 @@ body.admin{padding-bottom:2.6rem}
   });
   var lbAdjustRange = document.getElementById('lbAdjustRange');
   var lbAdjustVal = document.getElementById('lbAdjustVal');
+  var lbContrastRange = document.getElementById('lbContrastRange');
+  var lbContrastVal = document.getElementById('lbContrastVal');
+  var lbSatRange = document.getElementById('lbSatRange');
+  var lbSatVal = document.getElementById('lbSatVal');
   var lbAdjustBox = document.getElementById('lbAdjust');
   var adjustTimer = null;
   var currentLbId = null;
-  if (lbAdjustRange){
-    lbAdjustRange.addEventListener('input', function(){
-      var v = parseInt(lbAdjustRange.value, 10) || 0;
-      lbAdjustVal.textContent = (v > 0 ? '+' : '') + v;
-      lbImg.style.filter = v ? 'brightness(' + ((100 + v) / 100).toFixed(2) + ')' : '';
-    });
-    lbAdjustRange.addEventListener('change', function(){
-      var v = parseInt(lbAdjustRange.value, 10) || 0;
-      var id = currentLbId;
-      if (!id) return;
-      ADJUST[id] = v;
-      if (v === 0) delete ADJUST[id];
-      var t = roll.querySelector('[data-id="' + id + '"] img');
-      if (t) applyAdjustToImg(t, id);
-      if (adjustTimer) clearTimeout(adjustTimer);
-      adjustTimer = setTimeout(function(){
-        adminPost({ action: 'adjust', id: id, value: v }, function(){});
-      }, 600);
-    });
+  /* per-photo grade: {lift, contrast, sat}. Legacy KV entries are a bare lift number. */
+  function normAdjust(a){
+    if (typeof a === 'number') return { lift: a, contrast: 0, sat: 0 };
+    a = a || {};
+    return { lift: a.lift || 0, contrast: a.contrast || 0, sat: a.sat || 0 };
   }
+  function adjustFilter(a){
+    a = normAdjust(a);
+    var parts = [];
+    if (a.lift) parts.push('brightness(' + ((100 + a.lift) / 100).toFixed(2) + ')');
+    if (a.contrast) parts.push('contrast(' + ((100 + a.contrast) / 100).toFixed(2) + ')');
+    if (a.sat) parts.push('saturate(' + ((100 + a.sat) / 100).toFixed(2) + ')');
+    return parts.join(' ');
+  }
+  function readSliders(){
+    return {
+      lift: lbAdjustRange ? (parseInt(lbAdjustRange.value, 10) || 0) : 0,
+      contrast: lbContrastRange ? (parseInt(lbContrastRange.value, 10) || 0) : 0,
+      sat: lbSatRange ? (parseInt(lbSatRange.value, 10) || 0) : 0
+    };
+  }
+  function fmtVal(el, v){ if (el) el.textContent = (v > 0 ? '+' : '') + v; }
+  function previewAdjust(){
+    var a = readSliders();
+    fmtVal(lbAdjustVal, a.lift); fmtVal(lbContrastVal, a.contrast); fmtVal(lbSatVal, a.sat);
+    lbImg.style.filter = adjustFilter(a);
+  }
+  function saveAdjust(){
+    var id = currentLbId;
+    if (!id) return;
+    var a = readSliders();
+    if (!a.lift && !a.contrast && !a.sat) delete ADJUST[id]; else ADJUST[id] = a;
+    var t = roll.querySelector('[data-id="' + id + '"] img');
+    if (t) applyAdjustToImg(t, id);
+    if (adjustTimer) clearTimeout(adjustTimer);
+    adjustTimer = setTimeout(function(){
+      adminPost({ action: 'adjust', id: id, value: a }, function(){});
+    }, 600);
+  }
+  [lbAdjustRange, lbContrastRange, lbSatRange].forEach(function(r){
+    if (!r) return;
+    r.addEventListener('input', previewAdjust);
+    r.addEventListener('change', saveAdjust);
+  });
   var lbList = [], lbIdx = 0;
   function visiblePhotos(){
     return PHOTOS.filter(function(p){ return ADMIN || !HIDDEN[p.id]; });
@@ -550,10 +583,13 @@ body.admin{padding-bottom:2.6rem}
     lbImg.src = file;
     lbImg.alt = 'Neon Party frame ' + id;
     lbNum.textContent = id.replace('/', ' / ');
-    var av = ADJUST[id] || 0;
-    lbImg.style.filter = av ? 'brightness(' + ((100 + av) / 100).toFixed(2) + ')' : '';
+    var av = normAdjust(ADJUST[id]);
+    lbImg.style.filter = adjustFilter(av);
     if (lbAdjustBox) lbAdjustBox.style.display = ADMIN ? 'block' : 'none';
-    if (lbAdjustRange){ lbAdjustRange.value = av; lbAdjustVal.textContent = (av > 0 ? '+' : '') + av; }
+    if (lbAdjustRange) lbAdjustRange.value = av.lift;
+    if (lbContrastRange) lbContrastRange.value = av.contrast;
+    if (lbSatRange) lbSatRange.value = av.sat;
+    fmtVal(lbAdjustVal, av.lift); fmtVal(lbContrastVal, av.contrast); fmtVal(lbSatVal, av.sat);
     syncLbHeart(id);
     lb.classList.add('open');
   }
@@ -565,8 +601,7 @@ body.admin{padding-bottom:2.6rem}
   var ADJUST = {};
   function adminPin(){ try { return sessionStorage.getItem('neon_pin') || ''; } catch(e){ return ''; } }
   function applyAdjustToImg(img, id){
-    var v = ADJUST[id] || 0;
-    img.style.filter = v ? 'brightness(' + ((100 + v) / 100).toFixed(2) + ')' : '';
+    img.style.filter = adjustFilter(ADJUST[id]);
   }
   function refreshTileVisibility(){
     var tiles = roll.querySelectorAll('.tile');
