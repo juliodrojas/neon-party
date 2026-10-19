@@ -249,6 +249,11 @@ h2.section-title{
   font-family:'Orbitron';font-size:.72rem;letter-spacing:.26em;cursor:pointer;color:#000;font-weight:800;
   background:linear-gradient(90deg,var(--magenta),var(--cyan));border:none;border-radius:999px;padding:.8rem 2rem;
 }
+.lb-download{
+  display:inline-block;margin-top:.7rem;font-family:'Orbitron';font-size:.72rem;letter-spacing:.26em;cursor:pointer;
+  color:var(--cyan);text-decoration:none;border:1px solid rgba(0,240,255,.55);border-radius:999px;padding:.8rem 2rem;
+  background:rgba(0,240,255,.06);
+}
 
 /* ---------- footer ---------- */
 footer{
@@ -405,6 +410,7 @@ body.admin .adminbar{display:block}
     </div>
 
     <button class="lb-close" id="lbClose">BACK TO THE ROLL</button>
+    <br><a class="lb-download" id="lbDownload" target="_blank" download>⬇ DOWNLOAD PHOTO</a>
   </div>
 </div>
 
@@ -455,6 +461,7 @@ body.admin .adminbar{display:block}
   var lbImg = document.getElementById('lbImg');
   var lbNum = document.getElementById('lbNum');
   var lbHeart = document.getElementById('lbHeart');
+  var lbDownload = document.getElementById('lbDownload');
   var lbId = null;
   function syncLbHeart(id){
     lbId = id;
@@ -497,6 +504,10 @@ body.admin .adminbar{display:block}
   }
   function openLb(id, file){
     currentLbId = id;
+    if (lbDownload){
+      lbDownload.href = file;
+      lbDownload.setAttribute('download', 'neon-party-' + id.replace('/', '-') + '.jpg');
+    }
     lbImg.src = file;
     lbImg.alt = 'Neon Party frame ' + id;
     lbNum.textContent = id.replace('/', ' / ');
